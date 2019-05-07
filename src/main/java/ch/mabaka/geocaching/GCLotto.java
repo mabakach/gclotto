@@ -1,8 +1,12 @@
 package ch.mabaka.geocaching;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -17,32 +21,54 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import ch.qos.logback.core.net.SyslogOutputStream;
 
 /**
- * Automatic player for Geocaching Lotto on
+ * Automatic player for Geocaching lotto on
  * https://www.navikatzen.com/lotto/index.php?page=lotto
  *
  */
 public class GCLotto {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(GCLotto.class);
+	
+	private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+	
+	public Map<Integer, String> solutions = new ConcurrentHashMap<Integer, String>();
+	
 	public GCLotto() {
 
 	}
 
 	public void play() {
 		String time = "1556454731";
-		for (int i = 0; i < 100000; i++) {
-			String[] numbers = { "5", "19", "25", "28", "37", "43" };
+		while (true) {
+			String[] numbers = { "3", "7", "21", "28", "37", "40" };
 			String responseBody = null;
 			responseBody = callServer(time, numbers, responseBody);
 			if (responseBody != null) {
 				time = findTime(responseBody);
 				String treffer = findTreffer(responseBody).trim();
 				if (treffer != null && Integer.parseInt(treffer) > 2) {
-					System.out.println(treffer + " Treffer! " + "https://www.navikatzen.com/lotto/winner.php?passwort="
-							+ findPassword(responseBody));
+					String url = "https://www.navikatzen.com/lotto/winner.php?passwort=" + findPassword(responseBody);
+					LOGGER.info(DATE_FORMAT.format(new Date()) + " " + treffer + " Treffer! " + url);
+					solutions.put(Integer.parseInt(treffer), url);
+					synchronized (this) {
+						System.out.print("\033[H\033[2J");
+						System.out.flush();
+						System.out.println(DATE_FORMAT.format(new Date()));
+						solutions.keySet().forEach((i) -> System.out.println(i + " Treffer " + solutions.get(i)));
+						
+					}
 				} else {
 					// System.out.println(treffer + " Treffer! ");
 				}
+			}
+			if (solutions.containsKey(3) && solutions.containsKey(4) && solutions.containsKey(5) && solutions.containsKey(6)) {
+				break;
 			}
 
 		}
@@ -77,9 +103,9 @@ public class GCLotto {
 			};
 			responseBody = httpclient.execute(httpPost, responseHandler);
 		} catch (ClientProtocolException e) {
-			System.out.println(e.getMessage());
+			LOGGER.error(e.getMessage());
 		} catch (IOException e) {
-			System.out.println(e.getMessage());
+			LOGGER.error(e.getMessage());
 		}
 		return responseBody;
 	}
